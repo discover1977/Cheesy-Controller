@@ -14,6 +14,7 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <stdio.h>
+#include <avr/eeprom.h>
 
 #include "bits_macros.h"
 #include "MAX72xx.h"

@@ -43,9 +43,11 @@
 #define HIGH		1
 #define LOW			0
 
-
 #define MAX_CYCLE_NUMBERS	10
 #define PROG_NUMBERS		2
+
+#define SHOW_POWER_CYCLES	1000
+#define EN_CHANGE_POWER		200
 
 enum Mode{
 	ManualMode,
@@ -63,6 +65,7 @@ enum ProgName {
 	TestProg
 };
 
+
 typedef struct {
 	uint8_t State;
 	uint16_t CycleTime;
@@ -79,6 +82,7 @@ typedef struct {
 
 Programm ProgArray[PROG_NUMBERS];
 
+// Global variables
 uint16_t GTime = 7200, RTime = 30, PTime = 1;
 int8_t Power = 50;
 uint8_t WorkMode = ProgrammMode;
@@ -86,6 +90,7 @@ uint32_t ProgTime = 0;
 uint8_t ButtonCode, ButtonEvent, CurrentCycle = 0;
 int8_t CurrentProgNumber = Gauda;
 uint16_t BeepTime = 0, BeepCycle;
+int16_t ShowPower = 0;
 
 struct Flag {
 	uint8_t ProgIsStarted :1;
@@ -93,7 +98,15 @@ struct Flag {
 	uint8_t InitLocalTimerVar :1;
 	uint8_t SecondDot :1;
 	uint8_t BeepOnStop :1;
+	uint8_t EnChangePower :1;
 } Flag;
+
+void save_eeprom()
+{
+	cli();
+	eeprom_update_block( (uint8_t*)&ProgArray, 0, sizeof( ProgArray ) );
+	sei();
+}
 
 void get_but() {
 	ButtonCode = BUT_GetBut();
@@ -124,29 +137,36 @@ uint32_t prog_time(uint8_t progNumber) {
 }
 
 void prog_init() {
+
+	uint8_t* Pointer = (uint8_t*)&ProgArray;
+	for(int i = 0; i < sizeof(ProgArray); i++) {
+		*Pointer = 0x00;
+		Pointer++;
+	}
+
 	/* Gauda ******************************************/
-	ProgArray[Gauda].NuberOfCycles = 4;
+	ProgArray[Gauda].NuberOfCycles = 5;
 	// Gauda 1 cycle
 	ProgArray[Gauda].ProgCycleArray[0].State = Work;
-	ProgArray[Gauda].ProgCycleArray[0].CycleTime = 1800;
-	ProgArray[Gauda].ProgCycleArray[0].OWRTime = 60;
+	ProgArray[Gauda].ProgCycleArray[0].CycleTime = 300;
+	ProgArray[Gauda].ProgCycleArray[0].OWRTime = 30;
 	ProgArray[Gauda].ProgCycleArray[0].PBRevers = 2;
 	ProgArray[Gauda].ProgCycleArray[0].FullCycleTime = cycle_time(Gauda, 0);
-	ProgArray[Gauda].ProgCycleArray[0].Power = 100;
+	ProgArray[Gauda].ProgCycleArray[0].Power = 75;
 	// Gauda 2 cycle
 	ProgArray[Gauda].ProgCycleArray[1].State = Pause;
-	ProgArray[Gauda].ProgCycleArray[1].CycleTime = 600;
+	ProgArray[Gauda].ProgCycleArray[1].CycleTime = 300;
 	ProgArray[Gauda].ProgCycleArray[1].OWRTime = 0;
 	ProgArray[Gauda].ProgCycleArray[1].PBRevers = 0;
 	ProgArray[Gauda].ProgCycleArray[1].FullCycleTime = cycle_time(Gauda, 1);
 	ProgArray[Gauda].ProgCycleArray[1].Power = 0;
 	// Gauda 3 cycle
 	ProgArray[Gauda].ProgCycleArray[2].State = Work;
-	ProgArray[Gauda].ProgCycleArray[2].CycleTime = 1800;
-	ProgArray[Gauda].ProgCycleArray[2].OWRTime = 60;
+	ProgArray[Gauda].ProgCycleArray[2].CycleTime = 600;
+	ProgArray[Gauda].ProgCycleArray[2].OWRTime = 30;
 	ProgArray[Gauda].ProgCycleArray[2].PBRevers = 2;
 	ProgArray[Gauda].ProgCycleArray[2].FullCycleTime = cycle_time(Gauda, 2);
-	ProgArray[Gauda].ProgCycleArray[2].Power = 100;
+	ProgArray[Gauda].ProgCycleArray[2].Power = 75;
 	// Gauda 4 cycle
 	ProgArray[Gauda].ProgCycleArray[3].State = Pause;
 	ProgArray[Gauda].ProgCycleArray[3].CycleTime = 600;
@@ -154,34 +174,41 @@ void prog_init() {
 	ProgArray[Gauda].ProgCycleArray[3].PBRevers = 0;
 	ProgArray[Gauda].ProgCycleArray[3].FullCycleTime = cycle_time(Gauda, 3);
 	ProgArray[Gauda].ProgCycleArray[3].Power = 0;
+	// Gauda 5 cycle
+	ProgArray[Gauda].ProgCycleArray[3].State = Work;
+	ProgArray[Gauda].ProgCycleArray[3].CycleTime = 300;
+	ProgArray[Gauda].ProgCycleArray[3].OWRTime = 30;
+	ProgArray[Gauda].ProgCycleArray[3].PBRevers = 2;
+	ProgArray[Gauda].ProgCycleArray[3].FullCycleTime = cycle_time(Gauda, 4);
+	ProgArray[Gauda].ProgCycleArray[3].Power = 75;
 	/****************************************** Gauda */
 
 	/* Test prog **************************************/
 	ProgArray[TestProg].NuberOfCycles = 4;
 	// TestProg 1 cycle
 	ProgArray[TestProg].ProgCycleArray[0].State = Work;
-	ProgArray[TestProg].ProgCycleArray[0].CycleTime = 10;
+	ProgArray[TestProg].ProgCycleArray[0].CycleTime = 20;
 	ProgArray[TestProg].ProgCycleArray[0].OWRTime = 5;
 	ProgArray[TestProg].ProgCycleArray[0].PBRevers = 2;
 	ProgArray[TestProg].ProgCycleArray[0].FullCycleTime = cycle_time(TestProg, 0);
 	ProgArray[TestProg].ProgCycleArray[0].Power = 20;
 	// TestProg 2 cycle
 	ProgArray[TestProg].ProgCycleArray[1].State = Pause;
-	ProgArray[TestProg].ProgCycleArray[1].CycleTime = 5;
+	ProgArray[TestProg].ProgCycleArray[1].CycleTime = 10;
 	ProgArray[TestProg].ProgCycleArray[1].OWRTime = 0;
 	ProgArray[TestProg].ProgCycleArray[1].PBRevers = 0;
 	ProgArray[TestProg].ProgCycleArray[1].FullCycleTime = cycle_time(TestProg, 1);
 	ProgArray[TestProg].ProgCycleArray[1].Power = 0;
 	// TestProg 3 cycle
 	ProgArray[TestProg].ProgCycleArray[2].State = Work;
-	ProgArray[TestProg].ProgCycleArray[2].CycleTime = 10;
+	ProgArray[TestProg].ProgCycleArray[2].CycleTime = 20;
 	ProgArray[TestProg].ProgCycleArray[2].OWRTime = 5;
 	ProgArray[TestProg].ProgCycleArray[2].PBRevers = 2;
 	ProgArray[TestProg].ProgCycleArray[2].FullCycleTime = cycle_time(TestProg, 2);
 	ProgArray[TestProg].ProgCycleArray[2].Power = 80;
 	// TestProg 4 cycle
 	ProgArray[TestProg].ProgCycleArray[3].State = Pause;
-	ProgArray[TestProg].ProgCycleArray[3].CycleTime = 5;
+	ProgArray[TestProg].ProgCycleArray[3].CycleTime = 10;
 	ProgArray[TestProg].ProgCycleArray[3].OWRTime = 0;
 	ProgArray[TestProg].ProgCycleArray[3].PBRevers = 0;
 	ProgArray[TestProg].ProgCycleArray[3].FullCycleTime = cycle_time(TestProg, 3);
@@ -282,6 +309,10 @@ ISR(TIMER0_COMPA_vect) {
 
 	static uint16_t lCyclePause = 0;
 	static uint16_t lBeepTime = 0;
+
+	if(ShowPower > 0) {
+		if(--ShowPower == (SHOW_POWER_CYCLES - EN_CHANGE_POWER)) Flag.EnChangePower = 1;
+	}
 
 	if(BeepCycle > 0) {
 		if((++lBeepTime < BeepTime) && (lCyclePause == 0)) {
@@ -403,6 +434,15 @@ ISR(TIMER1_COMPA_vect) {
 }
 
 int main() {
+	eeprom_read_block( (uint8_t*)&ProgArray, 0, sizeof( ProgArray ) );
+
+	if (ProgArray[TestProg].ProgCycleArray[0].CycleTime == 0xFFFF) {
+		prog_init();
+		save_eeprom();
+	}
+
+	//prog_init();
+
 	uint8_t EncoderState = 0;
 
 	MAX72xx_Init(7);
@@ -426,21 +466,22 @@ int main() {
 
 	TIMSK1 = (1 << OCIE1A);
 
-	prog_init();
-
 	WorkMode = ProgrammMode;
 
 	Flag.ProgIsStarted = 0;
 	Flag.BeepOnStop = 0;
 
-	if(ProgTime < 3600) Flag.SecondDot = 0;
-	else Flag.SecondDot = 1;
-
 	sei();
+
+	set_power(0);
+	motor_ctrl(OFF, FORWARD);
 
 	beep(300, 1);
 
 	ProgTime = prog_time(CurrentProgNumber);
+
+	if(ProgTime < 3600) Flag.SecondDot = 0;
+	else Flag.SecondDot = 1;
 
 	while(1) {
 		get_but();
@@ -451,6 +492,7 @@ int main() {
 			MAX72xx_OutSym("--StoP--", 8);
 			beep(200, 3);
 			_delay_ms(1000);
+			save_eeprom();
 			MAX72xx_Clear(0);
 			ProgTime = prog_time(CurrentProgNumber);
 			if(ProgTime < 3600) Flag.SecondDot = 0;
@@ -479,14 +521,20 @@ int main() {
 				MAX72xx_OutIntFormat(CurrentCycle + 1, 6, 6, 0);
 			}
 
-			if(ProgTime < 3600) {
-				MAX72xx_OutIntFormat(ProgTime / 60, 3, 4, 3);
-				MAX72xx_OutIntFormat(ProgTime % 60, 1, 2, 3);
+			if(ShowPower == 0) {
+				if(ProgTime < 3600) {
+					MAX72xx_OutIntFormat(ProgTime / 60, 3, 4, 3);
+					MAX72xx_OutIntFormat(ProgTime % 60, 1, 2, 3);
+				}
+				else {
+					MAX72xx_OutIntFormat(ProgTime / 3600, 3, 4, 3);
+					MAX72xx_OutIntFormat((ProgTime / 60) - 60, 1, 2, 3);
+					MAX72xx_SetComma(1, Flag.SecondDot);
+				}
+				Flag.EnChangePower = 0;
 			}
 			else {
-				MAX72xx_OutIntFormat(ProgTime / 3600, 3, 4, 3);
-				MAX72xx_OutIntFormat((ProgTime / 60) - 60, 1, 2, 3);
-				MAX72xx_SetComma(1, Flag.SecondDot);
+				MAX72xx_OutIntFormat(ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power, 1, 4, 0);
 			}
 
 			if((ButtonCode == BUT_ENTER) && (ButtonEvent == BUT_DOUBLE_CLICK_CODE)) {
@@ -515,6 +563,7 @@ int main() {
 				MAX72xx_OutSym("--StoP--", 8);
 				beep(200, 3);
 				_delay_ms(1000);
+				save_eeprom();
 				MAX72xx_Clear(0);
 				ProgTime = prog_time(CurrentProgNumber);
 				if(ProgTime < 3600) Flag.SecondDot = 0;
@@ -522,46 +571,52 @@ int main() {
 			}
 
 			if(Flag.ProgIsStarted == 0) {
-#ifdef DEBUG
-				if((ButtonCode == BUT_UP) && (ButtonEvent == BUT_RELEASED_CODE)) {
-#else
 				if(EncoderState == RIGHT_SPIN) {
-#endif
 					if(++CurrentProgNumber == PROG_NUMBERS) CurrentProgNumber = 0;
 					ProgTime = prog_time(CurrentProgNumber);
 					if(ProgTime < 3600) Flag.SecondDot = 0;
 					else Flag.SecondDot = 1;
 				}
-#ifdef DEBUG
-				if((ButtonCode == BUT_DOWN) && (ButtonEvent == BUT_RELEASED_CODE)) {
-#else
+
 				if(EncoderState == LEFT_SPIN) {
-#endif
 					if(--CurrentProgNumber < 0) CurrentProgNumber = PROG_NUMBERS - 1;
 					ProgTime = prog_time(CurrentProgNumber);
 					if(ProgTime < 3600) Flag.SecondDot = 0;
 					else Flag.SecondDot = 1;
 				}
 			}
+			else {
+				if(EncoderState == RIGHT_SPIN) {
+					if(ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].State == Work) {
+						ShowPower = SHOW_POWER_CYCLES;
+						if((ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power < 100) && (Flag.EnChangePower == 1)) {
+							ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power++;
+							set_power(ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power);
+						}
+					}
+				}
+
+				if(EncoderState == LEFT_SPIN) {
+					if(ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].State == Work) {
+						ShowPower = SHOW_POWER_CYCLES;
+						if((ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power > 0) && (Flag.EnChangePower == 1)) {
+							ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power--;
+							set_power(ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power);
+						}
+					}
+				}
+			}
 		}
 		else {
 			MAX72xx_OutSym("H", 8);
 			MAX72xx_OutIntFormat(Power, 1, 3, 0);
-#ifdef DEBUG
-			if((ButtonCode == BUT_UP) && (ButtonEvent == BUT_RELEASED_CODE)) {
-#else
 			if(EncoderState == RIGHT_SPIN) {
-#endif
 				if(Power < 100) {
 					Power++;
 					if(Flag.ProgIsStarted) set_power(Power);
 				}
 			}
-#ifdef DEBUG
-			if((ButtonCode == BUT_DOWN) && (ButtonEvent == BUT_RELEASED_CODE)) {
-#else
 			if(EncoderState == LEFT_SPIN) {
-#endif
 				if(Power > 0) {
 					Power--;
 					if(Flag.ProgIsStarted) set_power(Power);

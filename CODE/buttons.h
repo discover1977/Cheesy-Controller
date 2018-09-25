@@ -106,25 +106,6 @@ BUT_1_LEV    активный уровень пина
 BUT_1_PULL   0 - не включать подт€гивающий резистор, 1 - включать
 BUT_1_EVEN   список событий, которые фиксируетс€ в буфере (BUT_EV_PRESSED|BUT_EV_RELEASED|...)*/
 
-#ifdef DEBUG
-	#define BUT_1_ID     1
-	#define BUT_1_DDRX   DDRB
-	#define BUT_1_PORTX  PORTB
-	#define BUT_1_PINX   PINB
-	#define BUT_1_PIN    0
-	#define BUT_1_LEV    0
-	#define BUT_1_PULL   1
-	#define BUT_1_EVENT  (BUT_EV_RELEASED|BUT_EV_RELEASED_LONG|BUT_EV_DOUBLE_CLICK)
-
-	#define BUT_3_ID     3
-	#define BUT_3_DDRX   DDRB
-	#define BUT_3_PORTX  PORTB
-	#define BUT_3_PINX   PINB
-	#define BUT_3_PIN    1
-	#define BUT_3_LEV    0
-	#define BUT_3_PULL   1
-	#define BUT_3_EVENT  (BUT_EV_RELEASED|BUT_EV_RELEASED_LONG|BUT_EV_DOUBLE_CLICK)
-#endif
 	#define BUT_2_ID     2
 	#define BUT_2_DDRX   DDRD
 	#define BUT_2_PORTX  PORTD
