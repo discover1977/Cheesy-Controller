@@ -430,8 +430,6 @@ int main() {
 
 	WorkMode = ProgrammMode;
 
-	ProgTime = prog_time(CurrentProgNumber);
-
 	Flag.ProgIsStarted = 0;
 	Flag.BeepOnStop = 0;
 
@@ -441,6 +439,8 @@ int main() {
 	sei();
 
 	beep(300, 1);
+
+	ProgTime = prog_time(CurrentProgNumber);
 
 	while(1) {
 		get_but();
