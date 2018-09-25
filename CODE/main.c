@@ -452,6 +452,9 @@ int main() {
 			beep(200, 3);
 			_delay_ms(1000);
 			MAX72xx_Clear(0);
+			ProgTime = prog_time(CurrentProgNumber);
+			if(ProgTime < 3600) Flag.SecondDot = 0;
+			else Flag.SecondDot = 1;
 		}
 
 		if((ButtonCode == BUT_ENTER) && (ButtonEvent == BUT_RELEASED_LONG_CODE) && (Flag.ProgIsStarted == 0)) {
@@ -513,6 +516,9 @@ int main() {
 				beep(200, 3);
 				_delay_ms(1000);
 				MAX72xx_Clear(0);
+				ProgTime = prog_time(CurrentProgNumber);
+				if(ProgTime < 3600) Flag.SecondDot = 0;
+				else Flag.SecondDot = 1;
 			}
 
 			if(Flag.ProgIsStarted == 0) {
