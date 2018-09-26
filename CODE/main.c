@@ -99,6 +99,7 @@ struct Flag {
 	uint8_t SecondDot :1;
 	uint8_t BeepOnStop :1;
 	uint8_t EnChangePower :1;
+	uint8_t SaveEEPROM :1;
 } Flag;
 
 void save_eeprom()
@@ -250,7 +251,7 @@ void paused_timer() {
 }
 
 void continued_timer() {
-	TCCR1B = (0 << WGM13) | (0 << WGM12) | (1 << CS12) | (0 << CS11) | (1 << CS10);
+	TCCR1B = (0 << WGM13) | (0 << WGM12) | (1 << CS12) | (0 << CS11) | (0 << CS10);
 }
 
 void start_timer() {
@@ -434,22 +435,23 @@ ISR(TIMER1_COMPA_vect) {
 }
 
 int main() {
-	eeprom_read_block( (uint8_t*)&ProgArray, 0, sizeof( ProgArray ) );
-
-	if (ProgArray[TestProg].ProgCycleArray[0].CycleTime == 0xFFFF) {
-		prog_init();
-		save_eeprom();
-	}
-
-	//prog_init();
-
 	uint8_t EncoderState = 0;
+	uint8_t Temp = 0;
 
 	MAX72xx_Init(7);
 	BUT_Init();
-#ifndef DEBUG
 	ENC_InitEncoder();
-#endif
+
+	eeprom_read_block((uint8_t*)&ProgArray, 0, sizeof(ProgArray));
+
+	if (ProgArray[TestProg].ProgCycleArray[0].CycleTime == 0xFFFF) {
+		MAX72xx_OutSym("--Init--", 8);
+		while(BitIsClear(PIND, 5));
+		_delay_ms(1000);
+		MAX72xx_Clear(0);
+		prog_init();
+		save_eeprom();
+	}
 
 	SetBit(GND_ENC_DDR, GND_ENC_PIN);
 	SetBit(M_INA_DDR, M_INA_PIN);
@@ -492,7 +494,10 @@ int main() {
 			MAX72xx_OutSym("--StoP--", 8);
 			beep(200, 3);
 			_delay_ms(1000);
-			save_eeprom();
+			if(Flag.SaveEEPROM) {
+				Flag.SaveEEPROM = 0;
+				save_eeprom();
+			}
 			MAX72xx_Clear(0);
 			ProgTime = prog_time(CurrentProgNumber);
 			if(ProgTime < 3600) Flag.SecondDot = 0;
@@ -563,7 +568,10 @@ int main() {
 				MAX72xx_OutSym("--StoP--", 8);
 				beep(200, 3);
 				_delay_ms(1000);
-				save_eeprom();
+				if(Flag.SaveEEPROM) {
+					Flag.SaveEEPROM = 0;
+					save_eeprom();
+				}
 				MAX72xx_Clear(0);
 				ProgTime = prog_time(CurrentProgNumber);
 				if(ProgTime < 3600) Flag.SecondDot = 0;
@@ -588,21 +596,25 @@ int main() {
 			else {
 				if(EncoderState == RIGHT_SPIN) {
 					if(ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].State == Work) {
+						Temp = ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power;
 						ShowPower = SHOW_POWER_CYCLES;
 						if((ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power < 100) && (Flag.EnChangePower == 1)) {
 							ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power++;
 							set_power(ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power);
 						}
+						if(Temp != ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power) Flag.SaveEEPROM = 1;
 					}
 				}
 
 				if(EncoderState == LEFT_SPIN) {
 					if(ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].State == Work) {
+						Temp = ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power;
 						ShowPower = SHOW_POWER_CYCLES;
 						if((ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power > 0) && (Flag.EnChangePower == 1)) {
 							ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power--;
 							set_power(ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power);
 						}
+						if(Temp != ProgArray[CurrentProgNumber].ProgCycleArray[CurrentCycle].Power) Flag.SaveEEPROM = 1;
 					}
 				}
 			}
