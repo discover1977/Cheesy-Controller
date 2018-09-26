@@ -175,12 +175,12 @@ void prog_init() {
 	ProgArray[Gauda].ProgCycleArray[3].FullCycleTime = cycle_time(Gauda, 3);
 	ProgArray[Gauda].ProgCycleArray[3].Power = 0;
 	// Gauda 5 cycle
-	ProgArray[Gauda].ProgCycleArray[3].State = Work;
-	ProgArray[Gauda].ProgCycleArray[3].CycleTime = 300;
-	ProgArray[Gauda].ProgCycleArray[3].OWRTime = 30;
-	ProgArray[Gauda].ProgCycleArray[3].PBRevers = 2;
-	ProgArray[Gauda].ProgCycleArray[3].FullCycleTime = cycle_time(Gauda, 4);
-	ProgArray[Gauda].ProgCycleArray[3].Power = 75;
+	ProgArray[Gauda].ProgCycleArray[4].State = Work;
+	ProgArray[Gauda].ProgCycleArray[4].CycleTime = 300;
+	ProgArray[Gauda].ProgCycleArray[4].OWRTime = 30;
+	ProgArray[Gauda].ProgCycleArray[4].PBRevers = 2;
+	ProgArray[Gauda].ProgCycleArray[4].FullCycleTime = cycle_time(Gauda, 4);
+	ProgArray[Gauda].ProgCycleArray[4].Power = 75;
 	/****************************************** Gauda */
 
 	/* Test prog **************************************/
