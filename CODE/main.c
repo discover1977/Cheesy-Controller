@@ -51,7 +51,8 @@
 
 enum Mode{
 	ManualMode,
-	ProgrammMode
+	ProgrammMode,
+	PHMeterMode
 };
 
 enum State{
@@ -91,6 +92,7 @@ uint8_t ButtonCode, ButtonEvent, CurrentCycle = 0;
 int8_t CurrentProgNumber = Gauda;
 uint16_t BeepTime = 0, BeepCycle;
 int16_t ShowPower = 0;
+uint16_t Version = 10;
 
 struct Flag {
 	uint8_t ProgIsStarted :1;
@@ -105,7 +107,7 @@ struct Flag {
 void save_eeprom()
 {
 	cli();
-	eeprom_update_block( (uint8_t*)&ProgArray, 0, sizeof( ProgArray ) );
+	eeprom_update_block( (uint8_t*)&ProgArray, 2, sizeof( ProgArray ) );
 	sei();
 }
 
@@ -442,7 +444,9 @@ int main() {
 	BUT_Init();
 	ENC_InitEncoder();
 
-	eeprom_read_block((uint8_t*)&ProgArray, 0, sizeof(ProgArray));
+	eeprom_read_block((uint8_t*)&Version, 0, sizeof(Version));
+
+	/*eeprom_read_block((uint8_t*)&ProgArray, 2, sizeof(ProgArray));
 
 	if (ProgArray[TestProg].ProgCycleArray[0].CycleTime == 0xFFFF) {
 		MAX72xx_OutSym("--Init--", 8);
@@ -451,7 +455,7 @@ int main() {
 		MAX72xx_Clear(0);
 		prog_init();
 		save_eeprom();
-	}
+	}*/
 
 	SetBit(GND_ENC_DDR, GND_ENC_PIN);
 	SetBit(M_INA_DDR, M_INA_PIN);
