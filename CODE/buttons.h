@@ -58,7 +58,7 @@
 чтобы она считалась длительно нажатой
 должно быть больше BUT_COUNT_THR */
 
-#define BUT_COUNT_HELD       1000
+#define BUT_COUNT_HELD       500
 
 
 
@@ -73,8 +73,6 @@
 1 - опрос одной кнопки за один вызов BUT_poll()*/
 
 #define BUT_POLL_ROTATION    0
-
-
 
 /* событи€, которые фиксируютс€ в буфере. 
 0 - это событие не фиксируетс€
@@ -106,14 +104,32 @@ BUT_1_LEV    активный уровень пина
 BUT_1_PULL   0 - не включать подт€гивающий резистор, 1 - включать
 BUT_1_EVEN   список событий, которые фиксируетс€ в буфере (BUT_EV_PRESSED|BUT_EV_RELEASED|...)*/
 
+	#define BUT_1_ID     1
+	#define BUT_1_DDRX   DDRD
+	#define BUT_1_PORTX  PORTD
+	#define BUT_1_PINX   PIND
+	#define BUT_1_PIN    5
+	#define BUT_1_LEV    0
+	#define BUT_1_PULL   1
+	#define BUT_1_EVENT  (BUT_EV_RELEASED|BUT_EV_RELEASED_LONG|BUT_EV_DOUBLE_CLICK)
+
 	#define BUT_2_ID     2
 	#define BUT_2_DDRX   DDRD
 	#define BUT_2_PORTX  PORTD
 	#define BUT_2_PINX   PIND
-	#define BUT_2_PIN    5
+	#define BUT_2_PIN    4
 	#define BUT_2_LEV    0
 	#define BUT_2_PULL   1
 	#define BUT_2_EVENT  (BUT_EV_RELEASED|BUT_EV_RELEASED_LONG|BUT_EV_DOUBLE_CLICK)
+
+	#define BUT_3_ID     3
+	#define BUT_3_DDRX   DDRD
+	#define BUT_3_PORTX  PORTD
+	#define BUT_3_PINX   PIND
+	#define BUT_3_PIN    7
+	#define BUT_3_LEV    0
+	#define BUT_3_PULL   1
+	#define BUT_3_EVENT  (BUT_EV_RELEASED|BUT_EV_RELEASED_LONG|BUT_EV_DOUBLE_CLICK)
 
 /**************** пользовательские функции *****************/
 

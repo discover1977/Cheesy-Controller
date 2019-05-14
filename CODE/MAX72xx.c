@@ -63,7 +63,7 @@ FLASH_VAR(uint8_t sym[]) =
   'o', (0<<SEG_A)|(0<<SEG_B)|(1<<SEG_C)|(1<<SEG_D)|(1<<SEG_E)|(0<<SEG_F)|(1<<SEG_G)|(0<<SEG_H),
   'P', (1<<SEG_A)|(1<<SEG_B)|(0<<SEG_C)|(0<<SEG_D)|(1<<SEG_E)|(1<<SEG_F)|(1<<SEG_G)|(0<<SEG_H),
   'C', (1<<SEG_A)|(0<<SEG_B)|(0<<SEG_C)|(1<<SEG_D)|(1<<SEG_E)|(1<<SEG_F)|(0<<SEG_G)|(0<<SEG_H),
-  'G', (1<<SEG_A)|(0<<SEG_B)|(1<<SEG_C)|(1<<SEG_D)|(1<<SEG_E)|(1<<SEG_F)|(1<<SEG_G)|(0<<SEG_H),
+  'G', (1<<SEG_A)|(0<<SEG_B)|(1<<SEG_C)|(1<<SEG_D)|(1<<SEG_E)|(1<<SEG_F)|(0<<SEG_G)|(0<<SEG_H),
   'c', (0<<SEG_A)|(0<<SEG_B)|(0<<SEG_C)|(1<<SEG_D)|(1<<SEG_E)|(0<<SEG_F)|(1<<SEG_G)|(0<<SEG_H),
   'n', (0<<SEG_A)|(0<<SEG_B)|(1<<SEG_C)|(0<<SEG_D)|(1<<SEG_E)|(0<<SEG_F)|(1<<SEG_G)|(0<<SEG_H),
   'd', (0<<SEG_A)|(1<<SEG_B)|(1<<SEG_C)|(1<<SEG_D)|(1<<SEG_E)|(0<<SEG_F)|(1<<SEG_G)|(0<<SEG_H),
@@ -209,7 +209,8 @@ uint8_t make_number(int32_t value, uint8_t start_pos, uint8_t stop_pos, uint8_t 
 		if (tmpVal != 0) ZnakPos++;
 	}
 	if (value < 0) {
-		Buffer[(comma_pos == 0)?(ZnakPos + start_pos):(comma_pos)] = SYMBOL_MINUS;
+		//Buffer[(comma_pos == 0)?(ZnakPos + start_pos):(comma_pos)] = SYMBOL_MINUS;
+		Buffer[ZnakPos + start_pos] = SYMBOL_MINUS;
 	}
 	return ZnakPos;
 }

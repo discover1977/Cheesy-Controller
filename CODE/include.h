@@ -15,11 +15,13 @@
 #include <avr/interrupt.h>
 #include <stdio.h>
 #include <avr/eeprom.h>
+#include <math.h>
 
 #include "bits_macros.h"
 #include "MAX72xx.h"
-
 #include "buttons.h"
+#include "onewire.h"
+#include "ds18x20.h"
 
 #ifndef DEBUG
 	#include "encoder.h"
