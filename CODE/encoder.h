@@ -9,8 +9,8 @@
 #define PORT_Enc 	PORTB
 #define PIN_Enc 	PINB
 #define DDR_Enc 	DDRB
-#define Pin1_Enc 	1
-#define Pin2_Enc 	0
+#define Pin1_Enc 	0
+#define Pin2_Enc 	1
 
 //______________________
 #define RIGHT_SPIN 0x01 

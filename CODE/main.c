@@ -9,6 +9,10 @@
 
 #define FW_VERSION	11
 #define BUT_ENTER	BUT_1_ID
+#define BUT_ENTER_PIN	7
+#define BUT_ENTER_DDR	DDRD
+#define BUT_ENTER_PORT	PORTD
+#define SOFT_START		1
 
 #ifdef DEBUG
 	#define BUT_UP		BUT_1_ID
@@ -24,29 +28,22 @@
 #define TEMP_U				20.0f
 
 // Motor driver definitions
-#define M_EN_PIN 		0
-#define M_EN_DDR 		DDRC
-#define M_EN_PORT 		PORTC
-#define M_INA_PIN 		2
-#define M_INA_DDR 		DDRC
-#define M_INA_PORT 		PORTC
-#define M_INB_PIN 		3
-#define M_INB_DDR 		DDRC
-#define M_INB_PORT 		PORTC
+#define M_EN_PIN 		4
+#define M_EN_DDR 		DDRD
+#define M_EN_PORT 		PORTD
+#define M_INA_PIN 		5
+#define M_INA_DDR 		DDRD
+#define M_INA_PORT 		PORTD
+#define M_INB_PIN 		6
+#define M_INB_DDR 		DDRD
+#define M_INB_PORT 		PORTD
+#define M_PWM_PIN 		3
+#define M_PWM_DDR 		DDRD
+#define M_PWM_PORT 		PORTD
 // Beeper definitions
 #define BEEP_PIN 		2
-#define BEEP_DDR 		DDRD
-#define BEEP_PORT 		PORTD
-
-// For encoder GND pin
-#define GND_ENC_PIN 	6
-#define GND_ENC_DDR 	DDRD
-#define GND_ENC_PORT 	PORTD
-
-// For TEST pin
-#define TEST_PIN 	5
-#define TEST_DDR 	DDRC
-#define TEST_PORT 	PORTC
+#define BEEP_DDR 		DDRC
+#define BEEP_PORT 		PORTC
 
 #define FORWARD		0
 #define BACKWARD	1
@@ -67,6 +64,7 @@
 #define AccSizeMacro(val)	( 1 << val )
 
 enum Mode {
+	StartModeList,
 	ProgrammMode,
 	ManualMode,
 	PHMeterMode,
@@ -110,8 +108,11 @@ typedef struct {
 Programm ProgArray[PROG_NUMBERS];
 
 // Global variables
-uint16_t GTime = 7200, RTime = 30, PTime = 1;
+uint16_t GTime = 7200, RTime = 15, PTime = 5;
 int8_t Power = 50;
+#if SOFT_START
+int8_t SoftPower = 0;
+#endif
 uint8_t WorkMode = ProgrammMode;
 uint32_t ProgTime = 0;
 uint8_t ButtonCode, ButtonEvent, CurrentCycle = 0;
@@ -134,6 +135,8 @@ struct Flag {
 	uint8_t SaveEEPROM :1;
 	uint8_t Mute : 1;
 	uint8_t ReadTemperature : 1;
+	uint8_t SoftStart :1;
+	uint8_t IsStarted :1;
 } Flag;
 
 long map(long x, long in_min, long in_max, long out_min, long out_max) {
@@ -389,12 +392,27 @@ void timer0_init() {
 void set_power(uint8_t val) {
 	if(val > 100) return;
 	else {
-		OCR2B = map(val, 0, 100, 0, 255);
+		if(val == 0) {
+			TCCR2A = (0 << COM2B1) | (0 << COM2B0) | (0 << WGM21) | (0 << WGM20);
+			OCR2B = 0x00;
+			Flag.IsStarted = 0;
+			Flag.SoftStart = 0;
+			SoftPower = 0;
+		}
+		else {
+			TCCR2A = (1 << COM2B1) | (0 << COM2B0) | (0 << WGM21) | (1 << WGM20);
+#if SOFT_START == 0
+			OCR2B = map(val, 0, 100, 0, 255);
+#else
+			if(!Flag.IsStarted) Flag.SoftStart = 1;
+			else OCR2B = map(val, 0, 100, 0, 255);
+#endif
+		}
 	}
 }
 
 void timer2_init() {
-	TCCR2A = (1 << COM2B1) | (0 << COM2B0) | (0 << WGM21) | (1 << WGM20);
+	//TCCR2A = (1 << COM2B1) | (0 << COM2B0) | (1 << WGM21) | (1 << WGM20);
 	TCCR2B = (0 << WGM22) | (0 << CS22) | (0 << CS21) | (1 << CS20);
 	OCR2A = 0;
 	OCR2B = 0;
@@ -428,17 +446,32 @@ ISR(ADC_vect) {
 
 ISR(TIMER0_COMPA_vect) {
 	TCNT0 = 0x00;
-	BUT_Poll();
-	ENC_PollEncoder();
-
 	static uint16_t lCyclePause = 0;
 	static uint16_t lBeepTime = 0;
 	static uint16_t lReadTempCnt = 0;
+
+	BUT_Poll();
+	ENC_PollEncoder();
 
 	if(++lReadTempCnt == 625) {
 		lReadTempCnt = 0;
 		Flag.ReadTemperature = 1;
 	}
+
+#if SOFT_START
+	static uint8_t DivCnt = 0;
+	if(Flag.SoftStart) {
+		OCR2B = map(SoftPower, 0, 100, 0, 255);
+		if(++DivCnt == 20) {
+			DivCnt = 0;
+			if(++SoftPower == Power) {
+				SoftPower = 0;
+				Flag.SoftStart = 0;
+				Flag.IsStarted = 1;
+			}
+		}
+	}
+#endif
 
 	if(ShowPower > 0) {
 		if(--ShowPower == (SHOW_POWER_CYCLES - EN_CHANGE_POWER)) Flag.EnChangePower = 1;
@@ -498,7 +531,10 @@ ISR(TIMER1_COMPA_vect) {
 				else {
 					lDirection = FORWARD;
 				}
-				lState = Work;
+				if(++lPTime == PTime) {
+					lState = Work;
+					lPTime = 0;
+				}
 			}
 		}
 		if (GTime == 0) {
@@ -563,8 +599,6 @@ ISR(TIMER1_COMPA_vect) {
 	}
 }
 
-// TODO корректное отображение напряжения
-
 int main() {
 	uint8_t EncoderState = 0;
 	uint8_t Temp = 0;
@@ -573,17 +607,16 @@ int main() {
 	float phBalance = 0.0;
 	float OffsetVoltage = 0.0;
 	float Voltage;
-	float Temperature = 20.0;
+	float Temperature = 0.0;
 	float pHSlope;
 
-	SetBit(GND_ENC_DDR, GND_ENC_PIN);
-	SetBitVal(PORTD, 5, 1);
-
 	MAX72xx_Init(7);
+	BUT_Init();
+	ENC_InitEncoder();
 
-	if (BitIsClear(PIND, 5)) {
+	if (BitIsClear(BUT_ENTER_PORT, BUT_ENTER_PIN)) {
 		MAX72xx_OutSym("--Init--", 8);
-		while(BitIsClear(PIND, 5));
+		while(BitIsClear(BUT_ENTER_PORT, BUT_ENTER_PIN));
 		_delay_ms(1000);
 		MAX72xx_Clear(0);
 		all_init();
@@ -626,16 +659,20 @@ int main() {
 		Temperature = DS18x20_ConvertThemperature();
 		MAX72xx_Clear(0);
 	}
-
-	BUT_Init();
-	ENC_InitEncoder();
+	else {
+		MAX72xx_OutSym("dS 18b20", 8);
+		_delay_ms(1000);
+		MAX72xx_OutSym("IS FAuLt", 8);
+		_delay_ms(1000);
+		MAX72xx_Clear(0);
+		Temperature = 20.0;
+	}
 
 	SetBit(M_INA_DDR, M_INA_PIN);
 	SetBit(M_INB_DDR, M_INB_PIN);
 	SetBit(M_EN_DDR, M_EN_PIN);
-	SetBit(DDRD, 3);
+	SetBit(M_PWM_DDR, M_PWM_PIN);
 	SetBit(BEEP_DDR, BEEP_PIN);
-	SetBit(TEST_DDR, TEST_PIN);
 
 	timer0_init();
 
@@ -647,7 +684,7 @@ int main() {
 
 	TIMSK1 = (1 << OCIE1A);
 
-	WorkMode = PHMeterMode;
+	WorkMode = ProgrammMode;
 
 	Flag.ProgIsStarted = 0;
 	Flag.BeepOnStop = 0;
@@ -656,6 +693,7 @@ int main() {
 
 	set_power(0);
 	motor_ctrl(OFF, FORWARD);
+
 	Flag.Mute = 1;
 
 	beep(300, 1);
@@ -686,7 +724,7 @@ int main() {
 
 		if((ButtonCode == BUT_ENTER) && (ButtonEvent == BUT_RELEASED_LONG_CODE) && (Flag.ProgIsStarted == 0)) {
 			if(++WorkMode == EndModeList) {
-				WorkMode = ManualMode;
+				WorkMode = StartModeList + 1;
 			}
 			MAX72xx_Clear(0);
 		}
@@ -834,7 +872,7 @@ int main() {
 				if((ButtonCode == BUT_ENTER) && (ButtonEvent == BUT_DOUBLE_CLICK_CODE) && (Flag.ProgIsStarted == 0)) {
 					GTime = 7200;
 					RTime = 30;
-					MAX72xx_OutSym("  ", 6);
+					MAX72xx_OutSym("En", 6);
 					start_timer();
 					Flag.ProgIsStarted = 1;
 				}
@@ -856,11 +894,19 @@ int main() {
 				Voltage = (5.0 / 1024.0 * (float)ADCData);	// Напряжение электрода
 				OffsetVoltage = (5.0 / 1024.0 * (float)ADCDataOffsetVal);								// Напряжение смещения
 
-				if(Flag.ReadTemperature) {
+				if((Flag.ReadTemperature) && (nDevices)){
 					Flag.ReadTemperature = 0;
-					DS18x20_ReadData((uint8_t*)OneWireDevices[0]);
-					Temperature = DS18x20_ConvertThemperature();
-					DS18x20_StartMeasure((uint8_t*)OneWireDevices[0]);
+					cli();
+					if (DS18x20_ReadData((uint8_t*)OneWireDevices[0]) == 0) {
+						nDevices = 0;
+						Temperature = 20.0;
+					}
+					else Temperature = DS18x20_ConvertThemperature();
+					if (DS18x20_StartMeasure((uint8_t*)OneWireDevices[0]) == 0) {
+						nDevices = 0;
+						Temperature = 20.0;
+					}
+					sei();
 				}
 
 				if(EncoderState == RIGHT_SPIN) {
@@ -887,7 +933,9 @@ int main() {
 						MAX72xx_OutIntFormat(phBalance * 100, 1, 5, 3);
 					} break;
 					case TemperatureDisplay:{
-						MAX72xx_OutSym("t ", 8);
+						MAX72xx_OutSym("t", 8);
+						if(nDevices) MAX72xx_OutSym(" ", 7);
+						else MAX72xx_OutSym("c", 7);
 						MAX72xx_OutSym("*", 1);
 						MAX72xx_OutIntFormat(Temperature * 10.0, 2, 5, 3);
 					} break;

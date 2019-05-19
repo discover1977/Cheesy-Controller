@@ -108,7 +108,7 @@ BUT_1_EVEN   список событий, которые фиксируется в буфере (BUT_EV_PRESSED|BUT_EV
 	#define BUT_1_DDRX   DDRD
 	#define BUT_1_PORTX  PORTD
 	#define BUT_1_PINX   PIND
-	#define BUT_1_PIN    5
+	#define BUT_1_PIN    7
 	#define BUT_1_LEV    0
 	#define BUT_1_PULL   1
 	#define BUT_1_EVENT  (BUT_EV_RELEASED|BUT_EV_RELEASED_LONG|BUT_EV_DOUBLE_CLICK)
@@ -117,16 +117,16 @@ BUT_1_EVEN   список событий, которые фиксируется в буфере (BUT_EV_PRESSED|BUT_EV
 	#define BUT_2_DDRX   DDRD
 	#define BUT_2_PORTX  PORTD
 	#define BUT_2_PINX   PIND
-	#define BUT_2_PIN    4
+	#define BUT_2_PIN    2
 	#define BUT_2_LEV    0
 	#define BUT_2_PULL   1
 	#define BUT_2_EVENT  (BUT_EV_RELEASED|BUT_EV_RELEASED_LONG|BUT_EV_DOUBLE_CLICK)
 
 	#define BUT_3_ID     3
-	#define BUT_3_DDRX   DDRD
-	#define BUT_3_PORTX  PORTD
-	#define BUT_3_PINX   PIND
-	#define BUT_3_PIN    7
+	#define BUT_3_DDRX   DDRB
+	#define BUT_3_PORTX  PORTB
+	#define BUT_3_PINX   PINB
+	#define BUT_3_PIN    4
 	#define BUT_3_LEV    0
 	#define BUT_3_PULL   1
 	#define BUT_3_EVENT  (BUT_EV_RELEASED|BUT_EV_RELEASED_LONG|BUT_EV_DOUBLE_CLICK)
