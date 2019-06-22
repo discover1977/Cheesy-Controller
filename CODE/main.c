@@ -27,6 +27,14 @@
 #define TEMP_D				0.0f
 #define TEMP_U				20.0f
 
+#define INTERNAL_ADC	1
+#define ADC_VOLTAGE		4.970F
+
+#if INTERNAL_ADC
+#define ELECTRODE_INPUT		0
+#define	AMPL_OFFSET_INPUT	1
+#endif
+
 // Motor driver definitions
 #define M_EN_PIN 		4
 #define M_EN_DDR 		DDRD
@@ -60,7 +68,7 @@
 #define SHOW_POWER_CYCLES	1000
 #define EN_CHANGE_POWER		200
 
-#define ACC_SIZE			7
+#define ACC_SIZE			8
 #define AccSizeMacro(val)	( 1 << val )
 
 enum Mode {
@@ -91,7 +99,7 @@ enum ProgName {
 };
 
 
-typedef struct {
+typedef struct ProgCycle{
 	uint8_t State;
 	uint16_t CycleTime;
 	uint16_t OWRTime;
@@ -100,7 +108,7 @@ typedef struct {
 	uint8_t Power;
 } ProgCycle;
 
-typedef struct {
+typedef struct Programm{
 	uint8_t NuberOfCycles;
 	ProgCycle ProgCycleArray[MAX_CYCLE_NUMBERS];
 } Programm;
@@ -109,7 +117,7 @@ Programm ProgArray[PROG_NUMBERS];
 
 // Global variables
 uint16_t GTime = 7200, RTime = 15, PTime = 5;
-int8_t Power = 50;
+int8_t PowerInManualMode = 50;
 #if SOFT_START
 int8_t SoftPower = 0;
 #endif
@@ -120,7 +128,7 @@ int8_t CurrentProgNumber = Gauda;
 uint16_t BeepTime = 0, BeepCycle;
 int16_t ShowPower = 0;
 uint8_t Version = 0;
-uint16_t ADCData = 0;
+uint16_t ADCData[2] = { 0 };
 uint16_t ADCDataOffsetVal;
 uint16_t ADCDataArray[AccSizeMacro(ACC_SIZE)] = { 0 };
 uint8_t OneWireDevices[MAXDEVICES][OW_ROMCODE_SIZE];
@@ -389,8 +397,8 @@ void timer0_init() {
 	OCR0A = 0x31;
 }
 
-void set_power(uint8_t val) {
-	if(val > 100) return;
+int8_t set_power(uint8_t val) {
+	if(val > 100) return 0;
 	else {
 		if(val == 0) {
 			TCCR2A = (0 << COM2B1) | (0 << COM2B0) | (0 << WGM21) | (0 << WGM20);
@@ -409,6 +417,7 @@ void set_power(uint8_t val) {
 #endif
 		}
 	}
+	return val;
 }
 
 void timer2_init() {
@@ -418,31 +427,50 @@ void timer2_init() {
 	OCR2B = 0;
 }
 
+#define ACC_VAL	1000
+
+#if INTERNAL_ADC
 ISR(ADC_vect) {
 	static uint8_t Tact = 0;
-	static uint64_t ADCAcc = 0;
-	static uint8_t AccCnt = 0;
-	uint8_t Input = 0;
+	static uint64_t ADCAcc[2] = { 0 };
+	static uint16_t AccCnt = 0;
+	// uint8_t Input = 0;
 
-	if(Tact == 0) {
+	/*if(Tact == 0) {
 		ADCData = float_window(ADCW);
-		Input = 4;
+		Input = AMPL_OFFSET_INPUT;
 	}
 	if(Tact == 1) {
-		if(AccCnt < 10) {
+		if(AccCnt < 100) {
 			ADCAcc += ADCW;
 		}
-		if(++AccCnt == 10) {
-			ADCDataOffsetVal = ADCAcc / 10;
+		if(++AccCnt == 100) {
+			ADCDataOffsetVal = ADCAcc / 100;
 			AccCnt = 0;
 			ADCAcc = 0;
 		}
-		Input = 1;
+		Input = ELECTRODE_INPUT;
+	}*/
+
+	ADCAcc[Tact] += ADCW;
+
+	if(++Tact == 2) {
+		Tact = 0;
+		if(++AccCnt == ACC_VAL) {
+			AccCnt = 0;
+
+			ADCData[0] = ADCAcc[0] / (ACC_VAL * 2);
+			ADCAcc[0] = 0;
+
+			ADCData[1] = ADCAcc[1] / ACC_VAL;
+			ADCAcc[1] = 0;
+		}
 	}
-	if(++Tact == 2) Tact = 0;
-	ADMUX = 0x40 | Input;
+
+	ADMUX = 0x40 | Tact;
 	ADCSRA |= (1 << ADSC);
 }
+#endif
 
 ISR(TIMER0_COMPA_vect) {
 	TCNT0 = 0x00;
@@ -464,7 +492,7 @@ ISR(TIMER0_COMPA_vect) {
 		OCR2B = map(SoftPower, 0, 100, 0, 255);
 		if(++DivCnt == 20) {
 			DivCnt = 0;
-			if(++SoftPower == Power) {
+			if(++SoftPower == PowerInManualMode) {
 				SoftPower = 0;
 				Flag.SoftStart = 0;
 				Flag.IsStarted = 1;
@@ -514,7 +542,7 @@ ISR(TIMER1_COMPA_vect) {
 		if(GTime > 0) {
 			GTime--;
 			if(lState == Work) {
-				set_power(Power);
+				set_power(PowerInManualMode);
 				motor_ctrl(ON, lDirection);
 				if(++lRTime == RTime) {
 					lRTime = 0;
@@ -552,7 +580,7 @@ ISR(TIMER1_COMPA_vect) {
 			if(ProgArray[CurrentProgNumber].ProgCycleArray[lCycleCount].State == Work) {
 
 				if(lState == Work) {
-					set_power(ProgArray[CurrentProgNumber].ProgCycleArray[lCycleCount].Power);
+					PowerInManualMode = set_power(ProgArray[CurrentProgNumber].ProgCycleArray[lCycleCount].Power);
 					motor_ctrl(ON, lDirection);
 					if(++lRTime == ProgArray[CurrentProgNumber].ProgCycleArray[lCycleCount].OWRTime) {
 						lRTime = 0;
@@ -605,8 +633,8 @@ int main() {
 	int8_t PHModeDispDataCnt = PHDisplay;
 
 	float phBalance = 0.0;
-	float OffsetVoltage = 0.0;
-	float Voltage;
+	double OffsetVoltage = 0.0;
+	double ElectrodeVoltage;
 	float Temperature = 0.0;
 	float pHSlope;
 
@@ -647,9 +675,9 @@ int main() {
 	if (nDevices > 0) {
 		MAX72xx_OutSym("Find    ", 8);
 		MAX72xx_OutIntFormat(nDevices, 1, 1, 0);
-		_delay_ms(1000);
+		_delay_ms(500);
 		MAX72xx_OutSym("dS 18b20", 8);
-		_delay_ms(1000);
+		_delay_ms(500);
 		MAX72xx_OutSym("  SEnS  ", 8);
 
 		DS18x20_Init( (uint8_t*)OneWireDevices[0], 25, 25, DS18B20_12_BIT );
@@ -661,9 +689,9 @@ int main() {
 	}
 	else {
 		MAX72xx_OutSym("dS 18b20", 8);
-		_delay_ms(1000);
+		_delay_ms(500);
 		MAX72xx_OutSym("IS FAuLt", 8);
-		_delay_ms(1000);
+		_delay_ms(500);
 		MAX72xx_Clear(0);
 		Temperature = 20.0;
 	}
@@ -684,7 +712,7 @@ int main() {
 
 	TIMSK1 = (1 << OCIE1A);
 
-	WorkMode = ProgrammMode;
+	WorkMode = PHMeterMode;
 
 	Flag.ProgIsStarted = 0;
 	Flag.BeepOnStop = 0;
@@ -779,6 +807,7 @@ int main() {
 					Flag.ProgIsPaused = 0;
 					Flag.ProgIsStarted = 0;
 					stop_timer();
+					set_power(0);
 					Flag.InitLocalTimerVar = 1;
 					MAX72xx_OutSym("--StoP--", 8);
 					beep(200, 3);
@@ -836,29 +865,29 @@ int main() {
 			} break;
 			case ManualMode: {
 				MAX72xx_OutSym("H", 8);
-				MAX72xx_OutIntFormat(Power, 1, 3, 0);
+				MAX72xx_OutIntFormat(PowerInManualMode, 1, 3, 0);
 				if(EncoderState == RIGHT_SPIN) {
-					if(Power < 100) {
-						Power++;
-						if(Flag.ProgIsStarted) set_power(Power);
+					if(PowerInManualMode < 100) {
+						PowerInManualMode++;
+						if(Flag.ProgIsStarted) set_power(PowerInManualMode);
 					}
 				}
 				if(EncoderState == LEFT_SPIN) {
-					if(Power > 0) {
-						Power--;
-						if(Flag.ProgIsStarted) set_power(Power);
+					if(PowerInManualMode > 0) {
+						PowerInManualMode--;
+						if(Flag.ProgIsStarted) set_power(PowerInManualMode);
 					}
 				}
 
 				if(Flag.ProgIsStarted == 0) {
 					if((BitIsClear(BUT_2_PINX, BUT_2_PIN)) && (BitIsSet(BUT_3_PINX, BUT_3_PIN))) {
 						MAX72xx_OutSym("-F-", 7);
-						set_power(Power);
+						set_power(PowerInManualMode);
 						//start_timer();
 						motor_ctrl(ON, FORWARD);
 					} else if((BitIsClear(BUT_3_PINX, BUT_3_PIN)) && (BitIsSet(BUT_2_PINX, BUT_2_PIN))) {
 						MAX72xx_OutSym("-r-", 7);
-						set_power(Power);
+						set_power(PowerInManualMode);
 						//start_timer();
 						motor_ctrl(ON, BACKWARD);
 					} else {
@@ -891,8 +920,8 @@ int main() {
 
 			} break;
 			case PHMeterMode: {
-				Voltage = (5.0 / 1024.0 * (float)ADCData);	// Напряжение электрода
-				OffsetVoltage = (5.0 / 1024.0 * (float)ADCDataOffsetVal);								// Напряжение смещения
+				ElectrodeVoltage = (ADC_VOLTAGE / (double)1024.0 * (double)ADCData[0]);					// Напряжение электрода
+				OffsetVoltage = (ADC_VOLTAGE / (double)1024.0 * (double)ADCData[1]);					// Напряжение смещения
 
 				if((Flag.ReadTemperature) && (nDevices)){
 					Flag.ReadTemperature = 0;
@@ -921,31 +950,29 @@ int main() {
 				}
 
 				switch (PHModeDispDataCnt) {
-					case PHDisplay:{
+					case PHDisplay: {
 						MAX72xx_OutSym("PH", 8);
-
 						pHSlope = get_pH_slope(Temperature);
-
 						float Offset = ISOPC_PH + (1.0 / pHSlope * ISOPC_E);
-						phBalance = Offset - mapf(Voltage - OffsetVoltage, pHSlope, 0.0, 1.0, 0.0);
+
+						phBalance = Offset + mapf(ElectrodeVoltage - OffsetVoltage, pHSlope, 0.0, 1.0, 0.0);
+
 						//phBalance = -((Voltage - OffsetVoltage) / pHSlope) + Offset;
 
 						MAX72xx_OutIntFormat(phBalance * 100, 1, 5, 3);
 					} break;
-					case TemperatureDisplay:{
+					case TemperatureDisplay: {
 						MAX72xx_OutSym("t", 8);
 						if(nDevices) MAX72xx_OutSym(" ", 7);
 						else MAX72xx_OutSym("c", 7);
 						MAX72xx_OutSym("*", 1);
 						MAX72xx_OutIntFormat(Temperature * 10.0, 2, 5, 3);
 					} break;
-					case VoltageDisplay:{
+					case VoltageDisplay: {
 						MAX72xx_OutSym("UE", 8);
-						if(Voltage < OffsetVoltage) MAX72xx_OutSym("-", 5);
-						else MAX72xx_OutSym(" ", 5);
-						MAX72xx_OutIntFormat(fabs(Voltage - OffsetVoltage) * 1000.0, 1, 4, 4);
+						MAX72xx_OutIntFormat(ElectrodeVoltage * 1000.0, 1, 5, 4);
 					} break;
-					case RefVoltageDisplay:{
+					case RefVoltageDisplay: {
 						MAX72xx_OutSym("Uo", 8);
 						MAX72xx_OutIntFormat(OffsetVoltage * 1000.0, 1, 5, 4);
 					} break;
