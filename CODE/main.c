@@ -7,9 +7,10 @@
 
 #include "include.h"
 
-#define FW_VERSION	11
-#define BUT_ENTER	BUT_1_ID
-#define BUT_ENTER_PIN	7
+#define FW_VERSION		12
+#define BUT_ENTER		BUT_1_ID
+#define BUT_ENTER_PINNUM	7
+#define BUT_ENTER_PIN	PIND
 #define BUT_ENTER_DDR	DDRD
 #define BUT_ENTER_PORT	PORTD
 #define SOFT_START		1
@@ -17,22 +18,6 @@
 #ifdef DEBUG
 	#define BUT_UP		BUT_1_ID
 	#define BUT_DOWN	BUT_3_ID
-#endif
-
-// PH sensor definitions
-#define ISOPC_PH			6.7f
-#define	ISOPC_E				0.018f
-#define TEMP_D_VOLTAGE		0.053f
-#define TEMP_U_VOLTAGE		0.057f
-#define TEMP_D				0.0f
-#define TEMP_U				20.0f
-
-#define INTERNAL_ADC	1
-#define ADC_VOLTAGE		4.970F
-
-#if INTERNAL_ADC
-#define ELECTRODE_INPUT		0
-#define	AMPL_OFFSET_INPUT	1
 #endif
 
 // Motor driver definitions
@@ -69,22 +54,13 @@
 #define EN_CHANGE_POWER		200
 
 #define ACC_SIZE			8
-#define AccSizeMacro(val)	( 1 << val )
+#define AccSizeMacro(val)	(1 << val)
 
 enum Mode {
 	StartModeList,
 	ProgrammMode,
 	ManualMode,
-	PHMeterMode,
 	EndModeList
-};
-
-enum PHModeDisplayData {
-	PHDisplay,
-	TemperatureDisplay,
-	VoltageDisplay,
-	RefVoltageDisplay,
-	EndPHModeDispDataEnum
 };
 
 enum State{
@@ -128,10 +104,6 @@ int8_t CurrentProgNumber = Gauda;
 uint16_t BeepTime = 0, BeepCycle;
 int16_t ShowPower = 0;
 uint8_t Version = 0;
-uint16_t ADCData[2] = { 0 };
-uint16_t ADCDataOffsetVal;
-uint16_t ADCDataArray[AccSizeMacro(ACC_SIZE)] = { 0 };
-uint8_t OneWireDevices[MAXDEVICES][OW_ROMCODE_SIZE];
 
 struct Flag {
 	uint8_t ProgIsStarted :1;
@@ -149,54 +121,6 @@ struct Flag {
 
 long map(long x, long in_min, long in_max, long out_min, long out_max) {
 	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
-
-float mapf(float x, float in_min, float in_max, float out_min, float out_max) {
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
-
-float get_pH_slope(float temperature) {
-	return mapf(temperature, TEMP_D, TEMP_U, TEMP_D_VOLTAGE, TEMP_U_VOLTAGE);
-}
-
-uint16_t float_window(uint16_t Value) {
-	static uint16_t Index = 0;
-	static uint64_t Summ = 0;
-
-	Summ += Value;
-
-	Summ -= ADCDataArray[Index];
-
-	ADCDataArray[Index++] = Value;
-
-	if (Index == AccSizeMacro(ACC_SIZE)) {
-		Index = 0;
-	}
-
-	return (Summ >> ACC_SIZE);
-}
-
-unsigned char search_ow_devices(void) {
-	unsigned char	i;
-   	unsigned char	id[OW_ROMCODE_SIZE];
-   	unsigned char	diff, sensors_count;
-
-	sensors_count = 0;
-	cli();
-	for( diff = OW_SEARCH_FIRST; diff != OW_LAST_DEVICE && sensors_count < MAXDEVICES ; ) {
-		OW_FindROM( &diff, &id[0] );
-
-      	if( diff == OW_PRESENCE_ERR ) break;
-
-      	if( diff == OW_DATA_ERR )	break;
-
-      	for ( i=0; i < OW_ROMCODE_SIZE; i++ )
-      		OneWireDevices[sensors_count][i] = id[i];
-
-		sensors_count++;
-    }
-	sei();
-	return sensors_count;
 }
 
 void save_eeprom() {
@@ -427,51 +351,6 @@ void timer2_init() {
 	OCR2B = 0;
 }
 
-#define ACC_VAL	1000
-
-#if INTERNAL_ADC
-ISR(ADC_vect) {
-	static uint8_t Tact = 0;
-	static uint64_t ADCAcc[2] = { 0 };
-	static uint16_t AccCnt = 0;
-	// uint8_t Input = 0;
-
-	/*if(Tact == 0) {
-		ADCData = float_window(ADCW);
-		Input = AMPL_OFFSET_INPUT;
-	}
-	if(Tact == 1) {
-		if(AccCnt < 100) {
-			ADCAcc += ADCW;
-		}
-		if(++AccCnt == 100) {
-			ADCDataOffsetVal = ADCAcc / 100;
-			AccCnt = 0;
-			ADCAcc = 0;
-		}
-		Input = ELECTRODE_INPUT;
-	}*/
-
-	ADCAcc[Tact] += ADCW;
-
-	if(++Tact == 2) {
-		Tact = 0;
-		if(++AccCnt == ACC_VAL) {
-			AccCnt = 0;
-
-			ADCData[0] = ADCAcc[0] / (ACC_VAL * 2);
-			ADCAcc[0] = 0;
-
-			ADCData[1] = ADCAcc[1] / ACC_VAL;
-			ADCAcc[1] = 0;
-		}
-	}
-
-	ADMUX = 0x40 | Tact;
-	ADCSRA |= (1 << ADSC);
-}
-#endif
-
 ISR(TIMER0_COMPA_vect) {
 	TCNT0 = 0x00;
 	static uint16_t lCyclePause = 0;
@@ -630,21 +509,15 @@ ISR(TIMER1_COMPA_vect) {
 int main() {
 	uint8_t EncoderState = 0;
 	uint8_t Temp = 0;
-	int8_t PHModeDispDataCnt = PHDisplay;
-
-	float phBalance = 0.0;
-	double OffsetVoltage = 0.0;
-	double ElectrodeVoltage;
-	float Temperature = 0.0;
-	float pHSlope;
 
 	MAX72xx_Init(7);
-	BUT_Init();
-	ENC_InitEncoder();
 
-	if (BitIsClear(BUT_ENTER_PORT, BUT_ENTER_PIN)) {
+	ENC_InitEncoder();
+	BUT_Init();
+
+	if (BitIsClear(BUT_ENTER_PIN, BUT_ENTER_PINNUM)) {
 		MAX72xx_OutSym("--Init--", 8);
-		while(BitIsClear(BUT_ENTER_PORT, BUT_ENTER_PIN));
+		while(BitIsClear(BUT_ENTER_PIN, BUT_ENTER_PINNUM));
 		_delay_ms(1000);
 		MAX72xx_Clear(0);
 		all_init();
@@ -666,35 +539,8 @@ int main() {
 	MAX72xx_OutSym("--    --", 8);
 	MAX72xx_OutIntFormat(Version, 4, 5, 5);
 
-	OW_Reset();
-	uint8_t nDevices = search_ow_devices();
-
-	_delay_ms(500);
+	_delay_ms(1000);
 	MAX72xx_Clear(0);
-
-	if (nDevices > 0) {
-		MAX72xx_OutSym("Find    ", 8);
-		MAX72xx_OutIntFormat(nDevices, 1, 1, 0);
-		_delay_ms(500);
-		MAX72xx_OutSym("dS 18b20", 8);
-		_delay_ms(500);
-		MAX72xx_OutSym("  SEnS  ", 8);
-
-		DS18x20_Init( (uint8_t*)OneWireDevices[0], 25, 25, DS18B20_12_BIT );
-		DS18x20_StartMeasure((uint8_t*)OneWireDevices[0]);
-		_delay_ms(1000);
-		DS18x20_ReadData((uint8_t*)OneWireDevices[0]);
-		Temperature = DS18x20_ConvertThemperature();
-		MAX72xx_Clear(0);
-	}
-	else {
-		MAX72xx_OutSym("dS 18b20", 8);
-		_delay_ms(500);
-		MAX72xx_OutSym("IS FAuLt", 8);
-		_delay_ms(500);
-		MAX72xx_Clear(0);
-		Temperature = 20.0;
-	}
 
 	SetBit(M_INA_DDR, M_INA_PIN);
 	SetBit(M_INB_DDR, M_INB_PIN);
@@ -706,13 +552,11 @@ int main() {
 
 	timer2_init();
 
-	adc_init();
-
 	TIMSK0 = (1 << OCIE0A);
 
 	TIMSK1 = (1 << OCIE1A);
 
-	WorkMode = PHMeterMode;
+	WorkMode = ProgrammMode;
 
 	Flag.ProgIsStarted = 0;
 	Flag.BeepOnStop = 0;
@@ -722,9 +566,9 @@ int main() {
 	set_power(0);
 	motor_ctrl(OFF, FORWARD);
 
-	Flag.Mute = 1;
+	Flag.Mute = 0;
 
-	beep(300, 1);
+	beep(200, 1);
 
 	ProgTime = prog_time(CurrentProgNumber);
 
@@ -771,11 +615,11 @@ int main() {
 
 				if(ShowPower == 0) {
 					if(ProgTime < 3600) {
-						MAX72xx_OutIntFormat(ProgTime / 60, 3, 4, 3);
+						MAX72xx_OutIntFormat(ProgTime / 60, 3, 5, 3);
 						MAX72xx_OutIntFormat(ProgTime % 60, 1, 2, 3);
 					}
 					else {
-						MAX72xx_OutIntFormat(ProgTime / 3600, 3, 4, 3);
+						MAX72xx_OutIntFormat(ProgTime / 3600, 3, 5, 3);
 						MAX72xx_OutIntFormat((ProgTime / 60) - 60, 1, 2, 3);
 						MAX72xx_SetComma(1, Flag.SecondDot);
 					}
@@ -917,67 +761,6 @@ int main() {
 					MAX72xx_Clear(0);
 				}
 
-
-			} break;
-			case PHMeterMode: {
-				ElectrodeVoltage = (ADC_VOLTAGE / (double)1024.0 * (double)ADCData[0]);					// Напряжение электрода
-				OffsetVoltage = (ADC_VOLTAGE / (double)1024.0 * (double)ADCData[1]);					// Напряжение смещения
-
-				if((Flag.ReadTemperature) && (nDevices)){
-					Flag.ReadTemperature = 0;
-					cli();
-					if (DS18x20_ReadData((uint8_t*)OneWireDevices[0]) == 0) {
-						nDevices = 0;
-						Temperature = 20.0;
-					}
-					else Temperature = DS18x20_ConvertThemperature();
-					if (DS18x20_StartMeasure((uint8_t*)OneWireDevices[0]) == 0) {
-						nDevices = 0;
-						Temperature = 20.0;
-					}
-					sei();
-				}
-
-				if(EncoderState == RIGHT_SPIN) {
-					if(++PHModeDispDataCnt >= EndPHModeDispDataEnum) {
-						PHModeDispDataCnt = PHDisplay;
-					}
-				}
-				if(EncoderState == LEFT_SPIN) {
-					if(--PHModeDispDataCnt < PHDisplay) {
-						PHModeDispDataCnt = EndPHModeDispDataEnum - 1;
-					}
-				}
-
-				switch (PHModeDispDataCnt) {
-					case PHDisplay: {
-						MAX72xx_OutSym("PH", 8);
-						pHSlope = get_pH_slope(Temperature);
-						float Offset = ISOPC_PH + (1.0 / pHSlope * ISOPC_E);
-
-						phBalance = Offset + mapf(ElectrodeVoltage - OffsetVoltage, pHSlope, 0.0, 1.0, 0.0);
-
-						//phBalance = -((Voltage - OffsetVoltage) / pHSlope) + Offset;
-
-						MAX72xx_OutIntFormat(phBalance * 100, 1, 5, 3);
-					} break;
-					case TemperatureDisplay: {
-						MAX72xx_OutSym("t", 8);
-						if(nDevices) MAX72xx_OutSym(" ", 7);
-						else MAX72xx_OutSym("c", 7);
-						MAX72xx_OutSym("*", 1);
-						MAX72xx_OutIntFormat(Temperature * 10.0, 2, 5, 3);
-					} break;
-					case VoltageDisplay: {
-						MAX72xx_OutSym("UE", 8);
-						MAX72xx_OutIntFormat(ElectrodeVoltage * 1000.0, 1, 5, 4);
-					} break;
-					case RefVoltageDisplay: {
-						MAX72xx_OutSym("Uo", 8);
-						MAX72xx_OutIntFormat(OffsetVoltage * 1000.0, 1, 5, 4);
-					} break;
-					default: break;
-				}
 
 			} break;
 			default: break;

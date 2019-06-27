@@ -22,6 +22,7 @@
 #include "buttons.h"
 #include "onewire.h"
 #include "ds18x20.h"
+#include "median.h"
 
 #ifndef DEBUG
 	#include "encoder.h"
